@@ -3159,20 +3159,42 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		if (!tle)
 			elog(ERROR, "bogus varattno for OUTER var: %d", var->varattno);
 
+	   /*
+		* HACK: ORCA does not maintain all the possible RTE (ex, Values Scan)
+		* due to which the variable names in such cases cannot be derived, so we use
+		* resname to display the variable.
+		* In case of Planner, resname is NULL, it is derived using RTE scanning so it
+		* uses the default planner path.
+		*/
+		if (tle->resname)
+		{
+			if (context->varprefix)
+				{
+					appendStringInfoString(buf, quote_identifier("outer"));
+					appendStringInfoChar(buf, '.');
+
+				}
+			appendStringInfoString(buf, tle->resname);
+			return NULL;
+		}
+		else
+		{
+		   /*
+			* Force parentheses because our caller probably assumed a Var is a
+			* simple expression.
+			*/
+			if (!IsA(tle->expr, Var))
+				appendStringInfoChar(buf, '(');
+			get_rule_expr((Node *) tle->expr, context, true);
+			if (!IsA(tle->expr, Var))
+				appendStringInfoChar(buf, ')');
+		}
+
+
 		Assert(netlevelsup == 0);
 		save_outer = dpns->outer_plan;
 		save_inner = dpns->inner_plan;
 		push_plan(dpns, dpns->outer_plan);
-
-		/*
-		 * Force parentheses because our caller probably assumed a Var is a
-		 * simple expression.
-		 */
-		if (!IsA(tle->expr, Var))
-			appendStringInfoChar(buf, '(');
-		get_rule_expr((Node *) tle->expr, context, true);
-		if (!IsA(tle->expr, Var))
-			appendStringInfoChar(buf, ')');
 
 		dpns->outer_plan = save_outer;
 		dpns->inner_plan = save_inner;
@@ -3193,16 +3215,36 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		save_inner = dpns->inner_plan;
 		push_plan(dpns, dpns->inner_plan);
 
-		/*
-		 * Force parentheses because our caller probably assumed a Var is a
-		 * simple expression.
-		 */
-		if (!IsA(tle->expr, Var))
-			appendStringInfoChar(buf, '(');
-		get_rule_expr((Node *) tle->expr, context, true);
-		if (!IsA(tle->expr, Var))
-			appendStringInfoChar(buf, ')');
+	   /*
+		* HACK: ORCA does not maintain all the possible RTE (ex, Values Scan)
+		* due to which the variable names in such cases cannot be derived, so we use
+		* resname to display the variable.
+		* In case of Planner, resname is NULL, it is derived using RTE scanning so it
+		* uses the default planner path.
+		*/
+		if (tle->resname)
+		{
+			if (context->varprefix)
+				{
+					appendStringInfoString(buf, quote_identifier("inner"));
+					appendStringInfoChar(buf, '.');
 
+				}
+			appendStringInfoString(buf, tle->resname);
+			return NULL;
+		}
+		else
+		{
+		   /*
+			* Force parentheses because our caller probably assumed a Var is a
+			* simple expression.
+			*/
+			if (!IsA(tle->expr, Var))
+				appendStringInfoChar(buf, '(');
+			get_rule_expr((Node *) tle->expr, context, true);
+			if (!IsA(tle->expr, Var))
+				appendStringInfoChar(buf, ')');
+		}
 		dpns->outer_plan = save_outer;
 		dpns->inner_plan = save_inner;
 		return NULL;
